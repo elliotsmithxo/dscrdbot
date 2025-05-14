@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 from keep_alive import keep_alive  # ❤️ Heartbeat
 
 load_dotenv()
-TOKEN = os.getenv("BOT_TOKEN_TEST")
+TOKEN = os.getenv("BOT_TOKEN")
 
 intents = discord.Intents.default()
 intents.message_content = True
