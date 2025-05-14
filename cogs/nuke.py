@@ -1,38 +1,21 @@
 import discord
 from discord.ext import commands
 from discord import app_commands
-import json
-
-CONFIG_PATH = "config.json"
-
-SPECIAL_NAME_KEYS = {
-    "έναστρος-ουρανός": "starboard_channel_id",
-    "welcome": "welcome_channel_id"
-}
+from utils.configmanager import ConfigManager  # ✅ config system
 
 class NukeView(discord.ui.View):
     def __init__(self, author, channel):
         super().__init__(timeout=15)
         self.author = author
         self.channel = channel
+        self.config = ConfigManager()
 
     async def update_config(self, new_channel):
-        config_key = None
-        try:
-            with open(CONFIG_PATH, "r") as f:
-                config = json.load(f)
-            for key, value in config.items():
-                if str(value) == str(self.channel.id):
-                    config_key = key
-                    break
-            if config_key:
-                config[config_key] = new_channel.id
-                with open(CONFIG_PATH, "w") as f:
-                    json.dump(config, f, indent=4)
-                print(f"[Nuke] Updated {config_key} to {new_channel.id}")
-        except Exception as e:
-            print(f"[ERROR] Failed to update config.json: {e}")
-
+        config_key = self.config.get_key_by_value(self.channel.id)
+        if not config_key:
+            config_key = self.config.generate_key_from_name(self.channel.name)
+        self.config.set(config_key, new_channel.id)
+        print(f"[Nuke] Updated config: {config_key} → {new_channel.id}")
 
     @discord.ui.button(label="Confirm", style=discord.ButtonStyle.green)
     async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -45,9 +28,15 @@ class NukeView(discord.ui.View):
         position = old_channel.position
         name = old_channel.name
         category = old_channel.category
+        overwrites = old_channel.overwrites
 
         await old_channel.delete()
-        new_channel = await guild.create_text_channel(name=name, category=category, position=position)
+        new_channel = await guild.create_text_channel(
+            name=name,
+            category=category,
+            position=position,
+            overwrites=overwrites
+        )
 
         await self.update_config(new_channel)
 
@@ -57,8 +46,7 @@ class NukeView(discord.ui.View):
             color=discord.Color.red()
         )
         await new_channel.send(embed=embed)
-        await interaction.response.defer()  # Cleanly closes the view
-
+        await interaction.response.defer()
         self.stop()
 
     @discord.ui.button(label="Cancel", style=discord.ButtonStyle.red)
@@ -66,7 +54,6 @@ class NukeView(discord.ui.View):
         if interaction.user.id != self.author.id:
             await interaction.response.send_message("You can't cancel someone else's nuke!", ephemeral=True)
             return
-
         await interaction.response.send_message("❎ Nuke canceled.", ephemeral=True)
         self.stop()
 
@@ -95,5 +82,5 @@ class Nuke(commands.Cog):
         await interaction.response.send_message(embed=embed, view=view)
 
 async def setup(bot):
-    if not bot.get_cog("Nuke"):
-        await bot.add_cog(Nuke(bot))
+    await bot.add_cog(Nuke(bot))
+
