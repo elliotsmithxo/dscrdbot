@@ -1,8 +1,9 @@
 import discord
 from discord.ext import commands
+from discord import app_commands
 import json
 import os
-from utils.configmanager import ConfigManager  # ✅ Use centralized config
+from utils.configmanager import ConfigManager
 
 class Starboard(commands.Cog):
     def __init__(self, bot):
@@ -40,10 +41,28 @@ class Starboard(commands.Cog):
         except:
             return None
 
+    @commands.command(name="setstarboard")
+    @commands.has_permissions(administrator=True)
+    async def set_starboard_legacy(self, ctx):
+        """Legacy command to set current channel as starboard"""
+        self.config.set("starboard_channel_id", ctx.channel.id)
+        await ctx.send(f"✅ {ctx.channel.mention} set as starboard channel.")
+
+    @app_commands.command(name="setstarboard", description="Set this channel as the starboard.")
+    @app_commands.checks.has_permissions(administrator=True)
+    async def set_starboard_slash(self, interaction: discord.Interaction):
+        self.config.set("starboard_channel_id", interaction.channel.id)
+        await interaction.response.send_message(
+            f"✅ {interaction.channel.mention} set as starboard channel.",
+            ephemeral=True
+        )
+
     @commands.Cog.listener()
     async def on_reaction_add(self, reaction, user):
         if user.bot or not reaction.message.guild:
             return
+
+        #print(f"[Starboard] ⭐ Reaction added by {user} on message {reaction.message.id}")
 
         if str(reaction.emoji) != self.star_emoji:
             return
@@ -54,13 +73,15 @@ class Starboard(commands.Cog):
 
         message_id = str(message.id)
         starboard_channel_id = self.config.get("starboard_channel_id")
-        if starboard_channel_id is None:
-            print("[Starboard] No starboard_channel_id in config.")
+        #print(f"[Starboard] Using channel ID: {starboard_channel_id}")
+
+        if not starboard_channel_id:
+            #print("[Starboard] No starboard channel set.")
             return
 
         starboard_channel = self.bot.get_channel(int(starboard_channel_id))
         if not isinstance(starboard_channel, discord.TextChannel):
-            print("[Starboard] Channel ID resolved but is not a text channel.")
+            #print("[Starboard] Invalid channel object.")
             return
 
         if message.channel.id == starboard_channel.id:
@@ -81,7 +102,7 @@ class Starboard(commands.Cog):
                 embed.set_footer(text=f"{self.star_emoji} {star_count} | #{message.channel.name}")
                 await starboard_message.edit(embed=embed)
             except discord.NotFound:
-                pass
+                #print("[Starboard] Starboard message no longer exists.")
         else:
             embed = discord.Embed(
                 description=message.content or "",
@@ -127,7 +148,7 @@ class Starboard(commands.Cog):
 
         message_id = str(message.id)
         starboard_channel_id = self.config.get("starboard_channel_id")
-        if starboard_channel_id is None or message_id not in self.starboard_data:
+        if not starboard_channel_id or message_id not in self.starboard_data:
             return
 
         starboard_channel = self.bot.get_channel(int(starboard_channel_id))
@@ -135,7 +156,9 @@ class Starboard(commands.Cog):
             return
 
         try:
-            starboard_message = await starboard_channel.fetch_message(self.starboard_data[message_id]["starboard_message_id"])
+            starboard_message = await starboard_channel.fetch_message(
+                self.starboard_data[message_id]["starboard_message_id"]
+            )
         except discord.NotFound:
             return
 
@@ -150,4 +173,9 @@ class Starboard(commands.Cog):
             await starboard_message.edit(embed=embed)
 
 async def setup(bot):
-    await bot.add_cog(Starboard(bot))
+    cog = Starboard(bot)
+    await bot.add_cog(cog)
+    try:
+        bot.tree.add_command(cog.set_starboard_slash)
+    except discord.app_commands.errors.CommandAlreadyRegistered:
+        pass
