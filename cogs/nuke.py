@@ -61,18 +61,23 @@ class Nuke(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.command(name="nuke")
-    async def legacy_nuke(self, ctx):
-        view = NukeView(author=ctx.author, channel=ctx.channel)
+    @commands.hybrid_command(name="nuke", description="Nuke this channel (deletes and recreates it).")
+    @commands.has_permissions(manage_channels=True)
+    async def nuke(self, ctx):
+        if isinstance(ctx, discord.Interaction):
+            author = ctx.user
+            channel = ctx.channel
+        else:
+            author = ctx.author
+            channel = ctx.channel
+            
+        view = NukeView(author=author, channel=channel)
         embed = discord.Embed(
             title="💣 Confirm Nuke",
             description="This will delete and recreate the channel.\nDo you want to continue?",
             color=discord.Color.orange()
         )
         await ctx.send(embed=embed, view=view)
-
-    @app_commands.command(name="nuke", description="Nuke this channel (deletes and recreates it).")
-    async def slash_nuke(self, interaction: discord.Interaction):
         view = NukeView(author=interaction.user, channel=interaction.channel)
         embed = discord.Embed(
             title="💣 Confirm Nuke",
