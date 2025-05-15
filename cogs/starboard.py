@@ -44,6 +44,7 @@ class Starboard(commands.Cog):
     @commands.command(name="setstarboard")
     @commands.has_permissions(administrator=True)
     async def set_starboard_legacy(self, ctx):
+        """Legacy command to set current channel as starboard"""
         self.config.set("starboard_channel_id", ctx.channel.id)
         await ctx.send(f"✅ {ctx.channel.mention} set as starboard channel.")
 
@@ -95,8 +96,7 @@ class Starboard(commands.Cog):
                 embed.set_footer(text=f"{self.star_emoji} {star_count} | #{message.channel.name}")
                 await starboard_message.edit(embed=embed)
             except discord.NotFound:
-                del self.starboard_data[message_id]
-                self.save_data()
+                pass
         else:
             embed = discord.Embed(
                 description=message.content or "",
