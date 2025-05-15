@@ -50,7 +50,7 @@ class NukeView(discord.ui.View):
                 await guild.edit(system_channel=new_channel)
                 #print(f"[Nuke] System channel reassigned to {new_channel.name}")
             except Exception as e:
-                #print(f"[Nuke] Failed to set system channel: {e}")
+                print(f"[Nuke] Failed to set system channel: {e}")
 
         await self.update_config(new_channel)
 

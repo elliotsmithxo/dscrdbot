@@ -44,7 +44,6 @@ class Starboard(commands.Cog):
     @commands.command(name="setstarboard")
     @commands.has_permissions(administrator=True)
     async def set_starboard_legacy(self, ctx):
-        """Legacy command to set current channel as starboard"""
         self.config.set("starboard_channel_id", ctx.channel.id)
         await ctx.send(f"✅ {ctx.channel.mention} set as starboard channel.")
 
@@ -62,8 +61,6 @@ class Starboard(commands.Cog):
         if user.bot or not reaction.message.guild:
             return
 
-        #print(f"[Starboard] ⭐ Reaction added by {user} on message {reaction.message.id}")
-
         if str(reaction.emoji) != self.star_emoji:
             return
 
@@ -73,15 +70,11 @@ class Starboard(commands.Cog):
 
         message_id = str(message.id)
         starboard_channel_id = self.config.get("starboard_channel_id")
-        #print(f"[Starboard] Using channel ID: {starboard_channel_id}")
-
         if not starboard_channel_id:
-            #print("[Starboard] No starboard channel set.")
             return
 
         starboard_channel = self.bot.get_channel(int(starboard_channel_id))
         if not isinstance(starboard_channel, discord.TextChannel):
-            #print("[Starboard] Invalid channel object.")
             return
 
         if message.channel.id == starboard_channel.id:
@@ -102,7 +95,8 @@ class Starboard(commands.Cog):
                 embed.set_footer(text=f"{self.star_emoji} {star_count} | #{message.channel.name}")
                 await starboard_message.edit(embed=embed)
             except discord.NotFound:
-                #print("[Starboard] Starboard message no longer exists.")
+                del self.starboard_data[message_id]
+                self.save_data()
         else:
             embed = discord.Embed(
                 description=message.content or "",
