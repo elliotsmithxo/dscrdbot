@@ -5,12 +5,14 @@ import json
 import os
 from utils.configmanager import ConfigManager
 
+
 class Starboard(commands.Cog):
+
     def __init__(self, bot):
         self.bot = bot
         self.config = ConfigManager()
         self.star_emoji = "⭐"
-        self.star_threshold = 1
+        self.star_threshold = 2
         self.data_file = "starboard_data.json"
         self.starboard_data = self.load_data()
 
@@ -48,14 +50,14 @@ class Starboard(commands.Cog):
         self.config.set("starboard_channel_id", ctx.channel.id)
         await ctx.send(f"✅ {ctx.channel.mention} set as starboard channel.")
 
-    @app_commands.command(name="setstarboard", description="Set this channel as the starboard.")
+    @app_commands.command(name="setstarboard",
+                          description="Set this channel as the starboard.")
     @app_commands.checks.has_permissions(administrator=True)
     async def set_starboard_slash(self, interaction: discord.Interaction):
         self.config.set("starboard_channel_id", interaction.channel.id)
         await interaction.response.send_message(
             f"✅ {interaction.channel.mention} set as starboard channel.",
-            ephemeral=True
-        )
+            ephemeral=True)
 
     @commands.Cog.listener()
     async def on_reaction_add(self, reaction, user):
@@ -89,26 +91,33 @@ class Starboard(commands.Cog):
             return
 
         if message_id in self.starboard_data:
-            starboard_message_id = self.starboard_data[message_id]["starboard_message_id"]
+            starboard_message_id = self.starboard_data[message_id][
+                "starboard_message_id"]
             try:
-                starboard_message = await starboard_channel.fetch_message(starboard_message_id)
+                starboard_message = await starboard_channel.fetch_message(
+                    starboard_message_id)
                 embed = starboard_message.embeds[0]
-                embed.set_footer(text=f"{self.star_emoji} {star_count} | #{message.channel.name}")
+                embed.set_footer(
+                    text=
+                    f"{self.star_emoji} {star_count} | #{message.channel.name}"
+                )
                 await starboard_message.edit(embed=embed)
             except discord.NotFound:
                 pass
         else:
-            embed = discord.Embed(
-                description=message.content or "",
-                color=discord.Color.gold(),
-                timestamp=message.created_at
-            )
-            embed.set_author(name=message.author.display_name, icon_url=message.author.display_avatar.url)
-            embed.add_field(name="Source", value=f"[Jump to message]({message.jump_url})", inline=False)
+            embed = discord.Embed(description=message.content or "",
+                                  color=discord.Color.gold(),
+                                  timestamp=message.created_at)
+            embed.set_author(name=message.author.display_name,
+                             icon_url=message.author.display_avatar.url)
+            embed.add_field(name="Source",
+                            value=f"[Jump to message]({message.jump_url})",
+                            inline=False)
 
             if message.attachments:
                 for attachment in message.attachments:
-                    if attachment.filename.lower().endswith((".png", ".jpg", ".jpeg", ".gif", ".webp")):
+                    if attachment.filename.lower().endswith(
+                        (".png", ".jpg", ".jpeg", ".gif", ".webp")):
                         embed.set_image(url=attachment.url)
                         break
 
@@ -118,7 +127,9 @@ class Starboard(commands.Cog):
                         embed.set_image(url=e.url)
                         break
 
-            embed.set_footer(text=f"{self.star_emoji} {star_count} | #{message.channel.name}")
+            embed.set_footer(
+                text=f"{self.star_emoji} {star_count} | #{message.channel.name}"
+            )
             starboard_message = await starboard_channel.send(embed=embed)
             await starboard_message.add_reaction(self.star_emoji)
 
@@ -151,8 +162,7 @@ class Starboard(commands.Cog):
 
         try:
             starboard_message = await starboard_channel.fetch_message(
-                self.starboard_data[message_id]["starboard_message_id"]
-            )
+                self.starboard_data[message_id]["starboard_message_id"])
         except discord.NotFound:
             return
 
@@ -163,8 +173,11 @@ class Starboard(commands.Cog):
             self.save_data()
         else:
             embed = starboard_message.embeds[0]
-            embed.set_footer(text=f"{self.star_emoji} {star_count} | #{message.channel.name}")
+            embed.set_footer(
+                text=f"{self.star_emoji} {star_count} | #{message.channel.name}"
+            )
             await starboard_message.edit(embed=embed)
+
 
 async def setup(bot):
     cog = Starboard(bot)
