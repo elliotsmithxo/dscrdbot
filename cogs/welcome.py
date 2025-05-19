@@ -4,14 +4,15 @@ from discord import app_commands
 from utils.configmanager import ConfigManager  # ✅ Centralized config
 
 # === Welcome Embed Constants ===
-EMBED_TITLE = "hi,"
-EMBED_DESCRIPTION = ("for those who aimlessly wander\n"
-                     "in search of something,,\n"
-                     "a final resting place\n"
-                     "for lost memories...")
-EMBED_IMAGE_URL = "https://i.pinimg.com/736x/97/4c/0f/974c0f19f6b394b0f610f162d8a2057d.jpg"
+EMBED_TITLE = "hi you,"
+EMBED_DESCRIPTION = ("think of this place like the moment\n"
+                     "right before the chorus hits\n"
+                     "still, honest,,\n"
+                     "a little sad\n"
+                     "but somehow sweeter for it")
+EMBED_IMAGE_URL = "https://i.pinimg.com/736x/c5/83/b6/c583b6f4ef35c73420ce15cbadb99250.jpg"
 EMBED_FOOTER = "⁺‧₊˚ ཐི⋆♱⋆ཋྀ ˚₊‧⁺"
-EMBED_COLOR = 0xE3E5E8
+EMBED_COLOR = 0xb5a12c
 
 
 class Welcome(commands.Cog):
