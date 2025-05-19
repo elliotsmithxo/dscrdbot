@@ -26,12 +26,6 @@ class Starboard(commands.Cog):
         with open(self.data_file, "w") as f:
             json.dump(self.starboard_data, f, indent=4)
 
-    def get_star_count(self, message):
-        for reaction in message.reactions:
-            if str(reaction.emoji) == self.star_emoji:
-                return reaction.count
-        return 0
-
     async def ensure_full_message(self, message):
         if isinstance(message, discord.PartialMessage) or message.partial:
             try:
@@ -43,10 +37,16 @@ class Starboard(commands.Cog):
         except:
             return None
 
+    async def count_valid_reactors(self, reaction, author_id):
+        count = 0
+        async for user in reaction.users():
+            if user.id != author_id and not user.bot:
+                count += 1
+        return count
+
     @commands.command(name="setstarboard")
     @commands.has_permissions(administrator=True)
     async def set_starboard_legacy(self, ctx):
-        """Legacy command to set current channel as starboard"""
         self.config.set("starboard_channel_id", ctx.channel.id)
         await ctx.send(f"✅ {ctx.channel.mention} set as starboard channel.")
 
@@ -68,7 +68,7 @@ class Starboard(commands.Cog):
             return
 
         message = await self.ensure_full_message(reaction.message)
-        if message is None:
+        if message is None or user.id == message.author.id:
             return
 
         message_id = str(message.id)
@@ -86,25 +86,29 @@ class Starboard(commands.Cog):
         if message.stickers and not message.content and not message.attachments:
             return
 
-        star_count = self.get_star_count(message)
-        if star_count < self.star_threshold:
+        for r in message.reactions:
+            if str(r.emoji) == self.star_emoji:
+                valid_count = await self.count_valid_reactors(
+                    r, message.author.id)
+                break
+        else:
             return
 
         if message_id in self.starboard_data:
-            starboard_message_id = self.starboard_data[message_id][
-                "starboard_message_id"]
-            try:
-                starboard_message = await starboard_channel.fetch_message(
-                    starboard_message_id)
-                embed = starboard_message.embeds[0]
-                embed.set_footer(
-                    text=
-                    f"{self.star_emoji} {star_count} | #{message.channel.name}"
-                )
-                await starboard_message.edit(embed=embed)
-            except discord.NotFound:
-                pass
-        else:
+            if valid_count >= self.star_threshold:
+                try:
+                    starboard_message = await starboard_channel.fetch_message(
+                        self.starboard_data[message_id]["starboard_message_id"]
+                    )
+                    embed = starboard_message.embeds[0]
+                    embed.set_footer(
+                        text=
+                        f"{self.star_emoji} {valid_count} | #{message.channel.name}"
+                    )
+                    await starboard_message.edit(embed=embed)
+                except discord.NotFound:
+                    pass
+        elif valid_count >= self.star_threshold:
             embed = discord.Embed(description=message.content or "",
                                   color=discord.Color.gold(),
                                   timestamp=message.created_at)
@@ -128,8 +132,8 @@ class Starboard(commands.Cog):
                         break
 
             embed.set_footer(
-                text=f"{self.star_emoji} {star_count} | #{message.channel.name}"
-            )
+                text=
+                f"{self.star_emoji} {valid_count} | #{message.channel.name}")
             starboard_message = await starboard_channel.send(embed=embed)
             await starboard_message.add_reaction(self.star_emoji)
 
@@ -166,16 +170,23 @@ class Starboard(commands.Cog):
         except discord.NotFound:
             return
 
-        star_count = self.get_star_count(message)
-        if star_count < self.star_threshold:
+        for r in message.reactions:
+            if str(r.emoji) == self.star_emoji:
+                valid_count = await self.count_valid_reactors(
+                    r, message.author.id)
+                break
+        else:
+            valid_count = 0
+
+        if valid_count < self.star_threshold:
             await starboard_message.delete()
             del self.starboard_data[message_id]
             self.save_data()
         else:
             embed = starboard_message.embeds[0]
             embed.set_footer(
-                text=f"{self.star_emoji} {star_count} | #{message.channel.name}"
-            )
+                text=
+                f"{self.star_emoji} {valid_count} | #{message.channel.name}")
             await starboard_message.edit(embed=embed)
 
 
