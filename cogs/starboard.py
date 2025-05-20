@@ -12,7 +12,7 @@ class Starboard(commands.Cog):
         self.bot = bot
         self.config = ConfigManager()
         self.star_emoji = "⭐"
-        self.star_threshold = 2
+        self.star_threshold = 1
         self.data_file = "starboard_data.json"
         self.starboard_data = self.load_data()
 
