@@ -18,13 +18,19 @@ class Starboard(commands.Cog):
 
     def load_data(self):
         if os.path.exists(self.data_file):
-            with open(self.data_file, "r") as f:
-                return json.load(f)
+            try:
+                with open(self.data_file, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            except json.JSONDecodeError:
+                return {}
         return {}
 
     def save_data(self):
-        with open(self.data_file, "w") as f:
-            json.dump(self.starboard_data, f, indent=4)
+        try:
+            with open(self.data_file, "w", encoding="utf-8") as f:
+                json.dump(self.starboard_data, f, indent=4)
+        except:
+            pass
 
     async def count_valid_reactors(self, reaction, author_id):
         count = 0
@@ -86,8 +92,7 @@ class Starboard(commands.Cog):
         if message.stickers and not message.content and not message.attachments:
             return
 
-        valid_count = await self.count_valid_reactors(reaction,
-                                                      message.author.id)
+        valid_count = await self.count_valid_reactors(reaction, message.author.id)
         if valid_count < self.star_threshold:
             return
 
@@ -96,10 +101,7 @@ class Starboard(commands.Cog):
                 starboard_message = await starboard_channel.fetch_message(
                     self.starboard_data[message_id]["starboard_message_id"])
                 embed = starboard_message.embeds[0]
-                embed.set_footer(
-                    text=
-                    f"{self.star_emoji} {valid_count} | #{message.channel.name}"
-                )
+                embed.set_footer(text=f"{self.star_emoji} {valid_count} | #{message.channel.name}")
                 await starboard_message.edit(embed=embed)
             except discord.NotFound:
                 pass
@@ -115,8 +117,7 @@ class Starboard(commands.Cog):
 
             if message.attachments:
                 for attachment in message.attachments:
-                    if attachment.filename.lower().endswith(
-                        (".png", ".jpg", ".jpeg", ".gif", ".webp")):
+                    if attachment.filename.lower().endswith((".png", ".jpg", ".jpeg", ".gif", ".webp")):
                         embed.set_image(url=attachment.url)
                         break
 
@@ -126,9 +127,7 @@ class Starboard(commands.Cog):
                         embed.set_image(url=e.url)
                         break
 
-            embed.set_footer(
-                text=
-                f"{self.star_emoji} {valid_count} | #{message.channel.name}")
+            embed.set_footer(text=f"{self.star_emoji} {valid_count} | #{message.channel.name}")
             starboard_message = await starboard_channel.send(embed=embed)
 
             self.starboard_data[message_id] = {
@@ -164,17 +163,14 @@ class Starboard(commands.Cog):
         except discord.NotFound:
             return
 
-        valid_count = await self.count_valid_reactors(reaction,
-                                                      message.author.id)
+        valid_count = await self.count_valid_reactors(reaction, message.author.id)
         if valid_count < self.star_threshold:
             await starboard_message.delete()
             del self.starboard_data[message_id]
             self.save_data()
         else:
             embed = starboard_message.embeds[0]
-            embed.set_footer(
-                text=
-                f"{self.star_emoji} {valid_count} | #{message.channel.name}")
+            embed.set_footer(text=f"{self.star_emoji} {valid_count} | #{message.channel.name}")
             await starboard_message.edit(embed=embed)
 
 
