@@ -31,6 +31,7 @@ async def load_extensions():
     await bot.load_extension("cogs.nuke")
     #await bot.load_extension("cogs.autorole")  # Only if you have it
     await bot.load_extension("cogs.moderation")
+    await bot.load_extension("cogs.avatar")
     # Add more cogs here if needed
 
 async def main():
