@@ -1,80 +1,27 @@
-import discord
 from discord.ext import commands
 from discord import app_commands
-from utils.configmanager import ConfigManager
-
-class NukeView(discord.ui.View):
-    def __init__(self, author, channel):
-        super().__init__(timeout=15)
-        self.author = author
-        self.channel = channel
-        self.config = ConfigManager()
-
-    async def update_config(self, new_channel):
-        config_key = self.config.get_key_by_value(self.channel.id)
-        if not config_key:
-            config_key = self.config.generate_key_from_name(self.channel.name)
-        try:
-            self.config.set(config_key, new_channel.id)
-        except Exception:
-            pass
-
-    @discord.ui.button(label="Confirm", style=discord.ButtonStyle.green)
-    async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if interaction.user.id != self.author.id:
-            await interaction.response.send_message("You can't confirm someone else's nuke!", ephemeral=True)
-            return
-
-        guild = interaction.guild
-        old_channel = self.channel
-        position = old_channel.position
-        name = old_channel.name
-        category = old_channel.category
-        overwrites = old_channel.overwrites
-
-        await old_channel.delete()
-        new_channel = await guild.create_text_channel(
-            name=name,
-            category=category,
-            position=position,
-            overwrites=overwrites
-        )
-
-        await self.update_config(new_channel)
-
-        embed = discord.Embed(
-            title="☢️ Channel Nuked",
-            description=f"{new_channel.mention} was recreated.\nNuked by: {self.author.mention}",
-            color=discord.Color.red()
-        )
-        await new_channel.send(embed=embed)
-        await interaction.response.defer()
-        self.stop()
-
-    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.red)
-    async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if interaction.user.id != self.author.id:
-            await interaction.response.send_message("You can't cancel someone else's nuke!", ephemeral=True)
-            return
-
-        await interaction.response.send_message("❎ Nuke canceled.", ephemeral=True)
-        self.stop()
+import discord
+from .nukeview import NukeView  # assuming your NukeView is in another file
 
 class Nuke(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
+    # ✅ LEGACY COMMAND with permission check
     @commands.command(name="nuke")
+    @commands.has_permissions(manage_channels=True)
     async def legacy_nuke(self, ctx):
         view = NukeView(author=ctx.author, channel=ctx.channel)
         embed = discord.Embed(
             title="💣 Confirm Nuke",
             description="This will delete and recreate the channel.\nDo you want to continue?",
-            color=discord.Color.orange
+            color=discord.Color.orange()
         )
         await ctx.send(embed=embed, view=view)
 
+    # ✅ SLASH COMMAND with permission check
     @app_commands.command(name="nuke", description="Nuke this channel (deletes and recreates it).")
+    @app_commands.checks.has_permissions(manage_channels=True)
     async def slash_nuke(self, interaction: discord.Interaction):
         view = NukeView(author=interaction.user, channel=interaction.channel)
         embed = discord.Embed(
@@ -83,6 +30,20 @@ class Nuke(commands.Cog):
             color=discord.Color.orange()
         )
         await interaction.response.send_message(embed=embed, view=view)
+
+    # ✅ Handle errors gracefully
+    @legacy_nuke.error
+    async def legacy_nuke_error(self, ctx, error):
+        if isinstance(error, commands.MissingPermissions):
+            await ctx.send("🚫 You need the `Manage Channels` permission to use this command.")
+
+    @slash_nuke.error
+    async def slash_nuke_error(self, interaction, error):
+        if isinstance(error, app_commands.MissingPermissions):
+            await interaction.response.send_message(
+                "🚫 You need the `Manage Channels` permission to use this command.",
+                ephemeral=True
+            )
 
 async def setup(bot):
     cog = Nuke(bot)
