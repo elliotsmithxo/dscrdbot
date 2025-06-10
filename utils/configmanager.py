@@ -26,8 +26,20 @@ class ConfigManager:
     def get(self, key):
         return self.config.get(key)
 
+    def get_guild(self, guild_id, key, default=None):
+        guilds = self.config.setdefault("guilds", {})
+        guild_conf = guilds.get(str(guild_id), {})
+        return guild_conf.get(key, default)
+
     def set(self, key, value):
         self.config[key] = value
+        self.save()
+
+    def set_guild(self, guild_id, key, value):
+        guilds = self.config.setdefault("guilds", {})
+        if str(guild_id) not in guilds:
+            guilds[str(guild_id)] = {}
+        guilds[str(guild_id)][key] = value
         self.save()
 
     def get_key_by_value(self, value):

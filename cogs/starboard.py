@@ -12,7 +12,7 @@ class Starboard(commands.Cog):
         self.bot = bot
         self.config = ConfigManager()
         self.star_emoji = "⭐"
-        self.star_threshold = 1
+        self.default_star_threshold = 1
         self.data_file = "starboard_data.json"
         self.starboard_data = self.load_data()
 
@@ -53,17 +53,30 @@ class Starboard(commands.Cog):
     @commands.command(name="setstarboard")
     @commands.has_permissions(administrator=True)
     async def set_starboard_legacy(self, ctx):
-        self.config.set("starboard_channel_id", ctx.channel.id)
+        self.config.set_guild(ctx.guild.id, "starboard_channel_id", ctx.channel.id)
         await ctx.send(f"✅ {ctx.channel.mention} set as starboard channel.")
 
     @app_commands.command(name="setstarboard",
                           description="Set this channel as the starboard.")
     @app_commands.checks.has_permissions(administrator=True)
     async def set_starboard_slash(self, interaction: discord.Interaction):
-        self.config.set("starboard_channel_id", interaction.channel.id)
+        self.config.set_guild(interaction.guild.id, "starboard_channel_id", interaction.channel.id)
         await interaction.response.send_message(
             f"✅ {interaction.channel.mention} set as starboard channel.",
             ephemeral=True)
+
+    @commands.command(name="setstarthreshold")
+    @commands.has_permissions(administrator=True)
+    async def set_star_threshold_legacy(self, ctx, threshold: int):
+        self.config.set_guild(ctx.guild.id, "star_threshold", threshold)
+        await ctx.send(f"✅ Star threshold set to {threshold}.")
+
+    @app_commands.command(name="setstarthreshold", description="Set the star threshold for this guild")
+    @app_commands.checks.has_permissions(administrator=True)
+    async def set_star_threshold_slash(self, interaction: discord.Interaction, threshold: int):
+        self.config.set_guild(interaction.guild.id, "star_threshold", threshold)
+        await interaction.response.send_message(
+            f"✅ Star threshold set to {threshold}.", ephemeral=True)
 
     @commands.Cog.listener()
     async def on_reaction_add(self, reaction, user):
@@ -78,7 +91,7 @@ class Starboard(commands.Cog):
             return
 
         message_id = str(message.id)
-        starboard_channel_id = self.config.get("starboard_channel_id")
+        starboard_channel_id = self.config.get_guild(message.guild.id, "starboard_channel_id")
         if not starboard_channel_id:
             return
 
@@ -93,7 +106,8 @@ class Starboard(commands.Cog):
             return
 
         valid_count = await self.count_valid_reactors(reaction, message.author.id)
-        if valid_count < self.star_threshold:
+        star_threshold = self.config.get_guild(message.guild.id, "star_threshold", self.default_star_threshold)
+        if valid_count < star_threshold:
             return
 
         if message_id in self.starboard_data:
@@ -149,7 +163,7 @@ class Starboard(commands.Cog):
             return
 
         message_id = str(message.id)
-        starboard_channel_id = self.config.get("starboard_channel_id")
+        starboard_channel_id = self.config.get_guild(message.guild.id, "starboard_channel_id")
         if not starboard_channel_id or message_id not in self.starboard_data:
             return
 
@@ -164,7 +178,8 @@ class Starboard(commands.Cog):
             return
 
         valid_count = await self.count_valid_reactors(reaction, message.author.id)
-        if valid_count < self.star_threshold:
+        star_threshold = self.config.get_guild(message.guild.id, "star_threshold", self.default_star_threshold)
+        if valid_count < star_threshold:
             await starboard_message.delete()
             del self.starboard_data[message_id]
             self.save_data()
@@ -179,5 +194,6 @@ async def setup(bot):
     await bot.add_cog(cog)
     try:
         bot.tree.add_command(cog.set_starboard_slash)
+        bot.tree.add_command(cog.set_star_threshold_slash)
     except discord.app_commands.errors.CommandAlreadyRegistered:
         pass
