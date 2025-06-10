@@ -14,12 +14,27 @@ class Moderation(commands.Cog):
     def load_banlog(self):
         if os.path.exists(BANLOG_FILE):
             with open(BANLOG_FILE, "r") as f:
-                return json.load(f)
+                try:
+                    return json.load(f)
+                except json.JSONDecodeError:
+                    return {}
         return {}
 
     def save_banlog(self):
         with open(BANLOG_FILE, "w") as f:
             json.dump(self.banlog, f, indent=4)
+
+    def add_ban(self, guild_id: int, user_id: int, reason: str):
+        guild_entry = self.banlog.setdefault(str(guild_id), {})
+        guild_entry[str(user_id)] = reason
+        self.save_banlog()
+
+    def remove_ban(self, guild_id: int, user_id: int):
+        guild_entry = self.banlog.get(str(guild_id), {})
+        guild_entry.pop(str(user_id), None)
+        if not guild_entry:
+            self.banlog.pop(str(guild_id), None)
+        self.save_banlog()
 
     # --- BAN ---
 
@@ -27,8 +42,7 @@ class Moderation(commands.Cog):
     @commands.has_permissions(ban_members=True)
     async def ban_legacy(self, ctx, member: discord.Member, *, reason: str = "No reason provided"):
         await member.ban(reason=reason)
-        self.banlog[str(member.id)] = reason
-        self.save_banlog()
+        self.add_ban(ctx.guild.id, member.id, reason)
         await ctx.send(f"✅ Banned {member.mention} for: {reason}")
 
     @app_commands.command(name="ban", description="Ban a member or user ID.")
@@ -39,15 +53,13 @@ class Moderation(commands.Cog):
 
         if member:
             await member.ban(reason=reason)
-            self.banlog[str(member.id)] = reason
-            self.save_banlog()
+            self.add_ban(interaction.guild.id, member.id, reason)
             await interaction.followup.send(f"✅ Banned {member.mention} for: {reason}")
         elif user_id:
             try:
                 user = await self.bot.fetch_user(int(user_id))
                 await interaction.guild.ban(user, reason=reason)
-                self.banlog[str(user.id)] = reason
-                self.save_banlog()
+                self.add_ban(interaction.guild.id, user.id, reason)
                 await interaction.followup.send(f"✅ Banned `{user}` (ID: {user.id}) for: {reason}")
             except Exception as e:
                 await interaction.followup.send(f"❌ Failed to ban user ID {user_id}: {e}")
@@ -76,8 +88,7 @@ class Moderation(commands.Cog):
     async def unban_legacy(self, ctx, user_id: int):
         user = await self.bot.fetch_user(user_id)
         await ctx.guild.unban(user)
-        self.banlog.pop(str(user_id), None)
-        self.save_banlog()
+        self.remove_ban(ctx.guild.id, user_id)
         await ctx.send(f"🔓 Unbanned {user.name}")
 
     @app_commands.command(name="unban", description="Unban a user by their ID.")
@@ -86,8 +97,7 @@ class Moderation(commands.Cog):
         await interaction.response.defer(ephemeral=True)
         user = await self.bot.fetch_user(int(user_id))
         await interaction.guild.unban(user)
-        self.banlog.pop(user_id, None)
-        self.save_banlog()
+        self.remove_ban(interaction.guild.id, int(user_id))
         await interaction.followup.send(f"🔓 Unbanned {user.name}")
 
     # --- PURGE ---
