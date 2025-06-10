@@ -23,8 +23,8 @@ class ConfigManager:
         with open(self.path, "w") as f:
             json.dump(self.config, f, indent=4)
 
-    def get(self, key):
-        return self.config.get(key)
+    def get(self, key, default=None):
+        return self.config.get(key, default)
 
     def set(self, key, value):
         self.config[key] = value
