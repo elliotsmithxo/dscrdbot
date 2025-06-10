@@ -33,7 +33,7 @@ class Welcome(commands.Cog):
 
     @commands.command(name="welcome")
     async def legacy_welcome(self, ctx):
-        channel_id = self.config.get("welcome_channel_id")
+        channel_id = self.config.get(ctx.guild.id, "welcome_channel_id")
         channel = self.bot.get_channel(channel_id)
         if not isinstance(channel, discord.TextChannel):
             await ctx.send("❌ Couldn't find the welcome channel.")
@@ -46,7 +46,7 @@ class Welcome(commands.Cog):
         description="Send the welcome embed to the welcome channel")
     @app_commands.checks.has_permissions(administrator=True)
     async def slash_welcome(self, interaction: discord.Interaction):
-        channel_id = self.config.get("welcome_channel_id")
+        channel_id = self.config.get(interaction.guild_id, "welcome_channel_id")
         channel = self.bot.get_channel(channel_id)
         if not isinstance(channel, discord.TextChannel):
             await interaction.response.send_message(
@@ -61,7 +61,7 @@ class Welcome(commands.Cog):
     @commands.command(name="setwelcome")
     @commands.has_permissions(administrator=True)
     async def legacy_set_welcome(self, ctx):
-        self.config.set("welcome_channel_id", ctx.channel.id)
+        self.config.set(ctx.guild.id, "welcome_channel_id", ctx.channel.id)
         await ctx.send(f"✅ {ctx.channel.mention} set as welcome channel.")
 
     @app_commands.command(
@@ -69,7 +69,7 @@ class Welcome(commands.Cog):
         description="Set this channel as the welcome channel.")
     @app_commands.checks.has_permissions(administrator=True)
     async def slash_set_welcome(self, interaction: discord.Interaction):
-        self.config.set("welcome_channel_id", interaction.channel.id)
+        self.config.set(interaction.guild_id, "welcome_channel_id", interaction.channel.id)
         await interaction.response.send_message(
             f"✅ {interaction.channel.mention} set as welcome channel.",
             ephemeral=True)

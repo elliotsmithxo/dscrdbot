@@ -8,32 +8,45 @@ CONFIG_PATH = "config.json"
 class ConfigManager:
     def __init__(self, path=CONFIG_PATH):
         self.path = path
+        self._needs_migration = False
         self.config = self.load()
+        if self._needs_migration:
+            self.save()
 
     def load(self):
         if not os.path.exists(self.path):
-            return {}
+            return {"guilds": {}}
         try:
             with open(self.path, "r") as f:
-                return json.load(f)
+                data = json.load(f)
+            if "guilds" not in data:
+                # Migrate old flat format to new guild-based structure
+                data = {"guilds": {"default": data}}
+                self._needs_migration = True
+            return data
         except Exception:
-            return {}
+            return {"guilds": {}}
 
     def save(self):
         with open(self.path, "w") as f:
             json.dump(self.config, f, indent=4)
 
-    def get(self, key):
-        return self.config.get(key)
+    def get(self, guild_id, key, default=None):
+        guild_id = str(guild_id)
+        return self.config.get("guilds", {}).get(guild_id, {}).get(key, default)
 
-    def set(self, key, value):
-        self.config[key] = value
+    def set(self, guild_id, key, value):
+        guild_id = str(guild_id)
+        self.config.setdefault("guilds", {})
+        self.config["guilds"].setdefault(guild_id, {})
+        self.config["guilds"][guild_id][key] = value
         self.save()
 
     def get_key_by_value(self, value):
-        for key, val in self.config.items():
-            if str(val) == str(value):
-                return key
+        for guild_settings in self.config.get("guilds", {}).values():
+            for key, val in guild_settings.items():
+                if str(val) == str(value):
+                    return key
         return None
 
     def generate_key_from_name(self, name):

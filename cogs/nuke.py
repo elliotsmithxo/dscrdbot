@@ -15,7 +15,7 @@ class NukeView(discord.ui.View):
         if not config_key:
             config_key = self.config.generate_key_from_name(self.channel.name)
         try:
-            self.config.set(config_key, new_channel.id)
+            self.config.set(self.channel.guild.id, config_key, new_channel.id)
         except Exception:
             pass
 

@@ -1,18 +1,16 @@
 import discord
 from discord.ext import commands
-import json
-
-CONFIG_PATH = "config.json"
+from utils.configmanager import ConfigManager
 
 class AutoRole(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+        self.config = ConfigManager()
 
-    def load_role_id(self):
+    def load_role_id(self, guild_id):
         try:
-            with open(CONFIG_PATH, "r") as f:
-                raw = json.load(f).get("auto_role_id")
-                return int(raw) if raw else None
+            raw = self.config.get(guild_id, "auto_role_id")
+            return int(raw) if raw else None
         except Exception as e:
             print(f"[AutoRole] Failed to load role ID: {e}")
             return None
@@ -22,7 +20,7 @@ class AutoRole(commands.Cog):
         if member.bot:
             return  # Skip bots
 
-        role_id = self.load_role_id()
+        role_id = self.load_role_id(member.guild.id)
         if role_id is None:
             print("[AutoRole] No auto_role_id found in config.json.")
             return

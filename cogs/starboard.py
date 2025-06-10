@@ -53,14 +53,14 @@ class Starboard(commands.Cog):
     @commands.command(name="setstarboard")
     @commands.has_permissions(administrator=True)
     async def set_starboard_legacy(self, ctx):
-        self.config.set("starboard_channel_id", ctx.channel.id)
+        self.config.set(ctx.guild.id, "starboard_channel_id", ctx.channel.id)
         await ctx.send(f"✅ {ctx.channel.mention} set as starboard channel.")
 
     @app_commands.command(name="setstarboard",
                           description="Set this channel as the starboard.")
     @app_commands.checks.has_permissions(administrator=True)
     async def set_starboard_slash(self, interaction: discord.Interaction):
-        self.config.set("starboard_channel_id", interaction.channel.id)
+        self.config.set(interaction.guild_id, "starboard_channel_id", interaction.channel.id)
         await interaction.response.send_message(
             f"✅ {interaction.channel.mention} set as starboard channel.",
             ephemeral=True)
@@ -78,7 +78,7 @@ class Starboard(commands.Cog):
             return
 
         message_id = str(message.id)
-        starboard_channel_id = self.config.get("starboard_channel_id")
+        starboard_channel_id = self.config.get(message.guild.id, "starboard_channel_id")
         if not starboard_channel_id:
             return
 
@@ -149,7 +149,7 @@ class Starboard(commands.Cog):
             return
 
         message_id = str(message.id)
-        starboard_channel_id = self.config.get("starboard_channel_id")
+        starboard_channel_id = self.config.get(message.guild.id, "starboard_channel_id")
         if not starboard_channel_id or message_id not in self.starboard_data:
             return
 
