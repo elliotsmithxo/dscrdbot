@@ -1,9 +1,8 @@
 {
-    "starboard_channel_id": 1374145060589015231,
-    "welcome_channel_id": 1373795133300150364,
-    "auto_role_id": 1371369224475377684,
-    "channel_litany": 1372328343306764319,
-    "channel_narkissos": 1377395278931431526,
-    "channel_rewind": 1377398982225039502,
-    "guilds": {}
+  "starboard_channel_id": 1374145060589015231,
+  "auto_role_id": 1371369224475377684,
+  "channel_litany": 1372328343306764319,
+  "channel_narkissos": 1377395278931431526,
+  "channel_rewind": 1377398982225039502,
+  "guilds": {}
 }
