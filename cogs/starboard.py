@@ -16,6 +16,80 @@ class Starboard(commands.Cog):
         self.data_file = "starboard_data.json"
         self.starboard_data = self.load_data()
 
+    async def create_starboard_entry(self, message: discord.Message, valid_count: int, starboard_channel: discord.TextChannel):
+        embed = discord.Embed(
+            description=message.content or "",
+            color=discord.Color.gold(),
+            timestamp=message.created_at,
+        )
+        embed.set_author(
+            name=message.author.display_name,
+            icon_url=message.author.display_avatar.url,
+        )
+        embed.add_field(
+            name="Source",
+            value=f"[Jump to message]({message.jump_url})",
+            inline=False,
+        )
+
+        if message.attachments:
+            for attachment in message.attachments:
+                if attachment.filename.lower().endswith((".png", ".jpg", ".jpeg", ".gif", ".webp")):
+                    embed.set_image(url=attachment.url)
+                    break
+
+        if message.embeds:
+            for e in message.embeds:
+                if e.type in ("gifv", "image") and hasattr(e, "url"):
+                    embed.set_image(url=e.url)
+                    break
+
+        embed.set_footer(text=f"{self.star_emoji} {valid_count} | #{message.channel.name}")
+        starboard_message = await starboard_channel.send(embed=embed)
+        self.starboard_data[str(message.id)] = {
+            "starboard_message_id": starboard_message.id,
+            "original_channel_id": message.channel.id,
+        }
+        self.save_data()
+
+    async def scan_for_star_reactions(self, guild: discord.Guild, limit: int = 100):
+        starboard_channel_id = self.config.get_guild(guild.id, "starboard_channel_id")
+        if not starboard_channel_id:
+            return
+
+        starboard_channel = self.bot.get_channel(int(starboard_channel_id))
+        if not isinstance(starboard_channel, discord.TextChannel):
+            return
+
+        star_threshold = self.config.get_guild(guild.id, "star_threshold", self.default_star_threshold)
+
+        for channel in guild.text_channels:
+            if channel.id == starboard_channel.id:
+                continue
+            async for message in channel.history(limit=limit):
+                if message.stickers and not message.content and not message.attachments:
+                    continue
+                reaction = discord.utils.get(message.reactions, emoji=self.star_emoji)
+                if not reaction:
+                    continue
+                valid_count = await self.count_valid_reactors(reaction, message.author.id)
+                if valid_count < star_threshold:
+                    continue
+
+                message_id = str(message.id)
+                if message_id in self.starboard_data:
+                    try:
+                        starboard_message = await starboard_channel.fetch_message(
+                            self.starboard_data[message_id]["starboard_message_id"]
+                        )
+                        embed = starboard_message.embeds[0]
+                        embed.set_footer(text=f"{self.star_emoji} {valid_count} | #{message.channel.name}")
+                        await starboard_message.edit(embed=embed)
+                    except discord.NotFound:
+                        await self.create_starboard_entry(message, valid_count, starboard_channel)
+                else:
+                    await self.create_starboard_entry(message, valid_count, starboard_channel)
+
     def load_data(self):
         if os.path.exists(self.data_file):
             try:
@@ -77,6 +151,20 @@ class Starboard(commands.Cog):
         self.config.set_guild(interaction.guild.id, "star_threshold", threshold)
         await interaction.response.send_message(
             f"✅ Star threshold set to {threshold}.", ephemeral=True)
+
+    @commands.command(name="scanstarboard")
+    @commands.has_permissions(administrator=True)
+    async def scan_starboard_legacy(self, ctx, limit: int = 100):
+        await ctx.send("🔍 Scanning recent messages for stars...")
+        await self.scan_for_star_reactions(ctx.guild, limit)
+        await ctx.send("✅ Scan complete.")
+
+    @app_commands.command(name="scanstarboard", description="Scan recent messages for star reactions")
+    @app_commands.checks.has_permissions(administrator=True)
+    async def scan_starboard_slash(self, interaction: discord.Interaction, limit: int = 100):
+        await interaction.response.defer(ephemeral=True)
+        await self.scan_for_star_reactions(interaction.guild, limit)
+        await interaction.followup.send("✅ Scan complete.", ephemeral=True)
 
     @commands.Cog.listener()
     async def on_reaction_add(self, reaction, user):
@@ -195,5 +283,6 @@ async def setup(bot):
     try:
         bot.tree.add_command(cog.set_starboard_slash)
         bot.tree.add_command(cog.set_star_threshold_slash)
+        bot.tree.add_command(cog.scan_starboard_slash)
     except discord.app_commands.errors.CommandAlreadyRegistered:
         pass
