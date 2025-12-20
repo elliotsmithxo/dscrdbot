@@ -1,9 +1,10 @@
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks
 from discord import app_commands
-from utils.configmanager import ConfigManager  # ✅ Centralized config
 
-# === Welcome Embed Defaults ===
+from utils.configmanager import ConfigManager
+from utils.embed_factory import themed_embed, DEFAULT_EMBED_FOOTER, get_embed_color
+
 DEFAULT_EMBED_TITLE = "hi you,"
 DEFAULT_EMBED_DESCRIPTION = (
     "think of this place like the moment\n"
@@ -12,152 +13,187 @@ DEFAULT_EMBED_DESCRIPTION = (
     "a little sad\n"
     "but somehow sweeter for it"
 )
-DEFAULT_EMBED_IMAGE_URL = (
-    "https://i.pinimg.com/736x/c5/83/b6/c583b6f4ef35c73420ce15cbadb99250.jpg"
-)
-DEFAULT_EMBED_FOOTER = "⁺‧₊˚ ཐི⋆♱⋆ཋྀ ˚₊‧⁺"
-DEFAULT_EMBED_COLOR = 0xb5a12c
+DEFAULT_EMBED_IMAGE_URL = "https://i.pinimg.com/736x/c5/83/b6/c583b6f4ef35c73420ce15cbadb99250.jpg"
 
 
 class Welcome(commands.Cog):
-
     def __init__(self, bot):
         self.bot = bot
         self.config = ConfigManager()
+        self._channel_health.start()  # (8) background cleanup
 
-    def build_welcome_embed(self, guild_id: int):
+    def cog_unload(self):
+        self._channel_health.cancel()
+
+    # (8) Validate channels periodically, clear config if channel deleted or bot cannot send
+    @tasks.loop(hours=6)
+    async def _channel_health(self):
+        for guild in self.bot.guilds:
+            welcome_channel_id = self.config.get_guild(guild.id, "welcome_channel", None)
+            if not welcome_channel_id:
+                continue
+
+            channel = guild.get_channel(int(welcome_channel_id))
+            if not channel or not isinstance(channel, discord.TextChannel):
+                self.config.set_guild(guild.id, "welcome_channel", None)
+                continue
+
+            perms = channel.permissions_for(guild.me)
+            if not (perms.send_messages and perms.embed_links):
+                # keep it simple: clear so it fails gracefully instead of spamming errors
+                self.config.set_guild(guild.id, "welcome_channel", None)
+
+    @_channel_health.before_loop
+    async def _before_channel_health(self):
+        await self.bot.wait_until_ready()
+
+    def build_welcome_embed(self, guild_id: int) -> discord.Embed:
         title = self.config.get_guild(guild_id, "welcome_title", DEFAULT_EMBED_TITLE)
-        description = self.config.get_guild(
-            guild_id, "welcome_description", DEFAULT_EMBED_DESCRIPTION
-        )
+        description = self.config.get_guild(guild_id, "welcome_description", DEFAULT_EMBED_DESCRIPTION)
         image = self.config.get_guild(guild_id, "welcome_image", DEFAULT_EMBED_IMAGE_URL)
         footer = self.config.get_guild(guild_id, "welcome_footer", DEFAULT_EMBED_FOOTER)
-        color = self.config.get_guild(guild_id, "welcome_color", DEFAULT_EMBED_COLOR)
-        embed = discord.Embed(title=title, description=description, color=color)
+
+        embed = themed_embed(
+            config=self.config,
+            guild_id=guild_id,
+            title=title,
+            description=description,
+            footer=footer,
+            legacy_keys=("welcome_color",),
+        )
         embed.set_image(url=image)
-        embed.set_footer(text=footer)
         return embed
 
-    # === SEND EMBED ===
-
-    @commands.command(name="welcome")
-    async def legacy_welcome(self, ctx):
-        channel_id = self.config.get_guild(ctx.guild.id, "welcome_channel_id")
-        channel = self.bot.get_channel(channel_id)
-        if not isinstance(channel, discord.TextChannel):
-            await ctx.send("❌ Couldn't find the welcome channel.")
+    @commands.Cog.listener()
+    async def on_member_join(self, member: discord.Member):
+        guild_id = member.guild.id
+        channel_id = self.config.get_guild(guild_id, "welcome_channel", None)
+        if not channel_id:
             return
-        await channel.send(embed=self.build_welcome_embed(ctx.guild.id))
-        await ctx.send("✅ Sent the welcome embed.")
 
-    @app_commands.command(
-        name="welcome",
-        description="Send the welcome embed to the welcome channel")
-    @app_commands.checks.has_permissions(administrator=True)
-    async def slash_welcome(self, interaction: discord.Interaction):
-        channel_id = self.config.get_guild(interaction.guild.id, "welcome_channel_id")
-        channel = self.bot.get_channel(channel_id)
-        if not isinstance(channel, discord.TextChannel):
-            await interaction.response.send_message(
-                "❌ Couldn't find the welcome channel.", ephemeral=True)
+        channel = member.guild.get_channel(int(channel_id))
+        if not channel:
             return
-        await channel.send(embed=self.build_welcome_embed(interaction.guild.id))
-        await interaction.response.send_message("✅ Welcome embed sent.",
-                                                ephemeral=True)
 
-    # === SET WELCOME CHANNEL ===
+        embed = self.build_welcome_embed(guild_id)
+        try:
+            await channel.send(content=f"welcome,, {member.mention}", embed=embed)
+        except discord.Forbidden:
+            # (6) gentle failure: clear invalid config
+            self.config.set_guild(guild_id, "welcome_channel", None)
+
+    # ---------------------------
+    # Admin: setwelcome
+    # ---------------------------
 
     @commands.command(name="setwelcome")
     @commands.has_permissions(administrator=True)
-    async def legacy_set_welcome(self, ctx):
-        self.config.set_guild(ctx.guild.id, "welcome_channel_id", ctx.channel.id)
-        await ctx.send(f"✅ {ctx.channel.mention} set as welcome channel.")
+    async def legacy_set_welcome(self, ctx, channel: discord.TextChannel):
+        self.config.set_guild(ctx.guild.id, "welcome_channel", channel.id)
+        await ctx.send(f"✅ welcome channel set to {channel.mention}")
 
-    @app_commands.command(
-        name="setwelcome",
-        description="Set this channel as the welcome channel.")
+    @app_commands.command(name="setwelcome", description="Set the welcome channel")
     @app_commands.checks.has_permissions(administrator=True)
-    async def slash_set_welcome(self, interaction: discord.Interaction):
-        self.config.set_guild(interaction.guild.id, "welcome_channel_id", interaction.channel.id)
-        await interaction.response.send_message(
-            f"✅ {interaction.channel.mention} set as welcome channel.",
-            ephemeral=True)
+    async def slash_set_welcome(self, interaction: discord.Interaction, channel: discord.TextChannel):
+        self.config.set_guild(interaction.guild.id, "welcome_channel", channel.id)
+        await interaction.response.send_message(f"✅ welcome channel set to {channel.mention}", ephemeral=True)
 
-    # === CUSTOMIZATION COMMANDS ===
+    # ---------------------------
+    # Global embed color (server)
+    # ---------------------------
 
-    @commands.command(name="setwelcometitle")
+    def _parse_hex_color(self, raw: str) -> int:
+        raw = (raw or "").strip()
+        if raw.startswith("#"):
+            raw = raw[1:]
+        if len(raw) != 6:
+            raise ValueError
+        return int(raw, 16)
+
+    @commands.command(name="setembedcolor")
     @commands.has_permissions(administrator=True)
-    async def legacy_set_welcome_title(self, ctx, *, title: str):
-        self.config.set_guild(ctx.guild.id, "welcome_title", title)
-        await ctx.send("✅ Welcome title updated.")
+    async def legacy_set_embed_color(self, ctx, color: str):
+        try:
+            value = self._parse_hex_color(color)
+        except ValueError:
+            return await ctx.send("❌ that hex doesn’t look right. try something like `#ff00ff`.")
 
-    @app_commands.command(name="setwelcometitle", description="Set the welcome embed title")
+        self.config.set_guild(ctx.guild.id, "embed_color", value)
+        await ctx.send(f"✅ global embed color set to `#{value:06x}`")
+
+    @app_commands.command(name="setembedcolor", description="Set the global embed color for this server (hex)")
     @app_commands.checks.has_permissions(administrator=True)
-    async def slash_set_welcome_title(self, interaction: discord.Interaction, title: str):
-        self.config.set_guild(interaction.guild.id, "welcome_title", title)
-        await interaction.response.send_message("✅ Welcome title updated.", ephemeral=True)
+    async def slash_set_embed_color(self, interaction: discord.Interaction, color: str):
+        try:
+            value = self._parse_hex_color(color)
+        except ValueError:
+            return await interaction.response.send_message(
+                "❌ that hex doesn’t look right. try something like `#ff00ff`.",
+                ephemeral=True,
+            )
 
-    @commands.command(name="setwelcomedescription")
-    @commands.has_permissions(administrator=True)
-    async def legacy_set_welcome_description(self, ctx, *, description: str):
-        self.config.set_guild(ctx.guild.id, "welcome_description", description)
-        await ctx.send("✅ Welcome description updated.")
+        self.config.set_guild(interaction.guild.id, "embed_color", value)
+        await interaction.response.send_message(f"✅ global embed color set to `#{value:06x}`", ephemeral=True)
 
-    @app_commands.command(name="setwelcomedescription", description="Set the welcome embed description")
-    @app_commands.checks.has_permissions(administrator=True)
-    async def slash_set_welcome_description(self, interaction: discord.Interaction, description: str):
-        self.config.set_guild(interaction.guild.id, "welcome_description", description)
-        await interaction.response.send_message("✅ Welcome description updated.", ephemeral=True)
-
-    @commands.command(name="setwelcomeimage")
-    @commands.has_permissions(administrator=True)
-    async def legacy_set_welcome_image(self, ctx, image_url: str):
-        self.config.set_guild(ctx.guild.id, "welcome_image", image_url)
-        await ctx.send("✅ Welcome image updated.")
-
-    @app_commands.command(name="setwelcomeimage", description="Set the welcome embed image URL")
-    @app_commands.checks.has_permissions(administrator=True)
-    async def slash_set_welcome_image(self, interaction: discord.Interaction, image_url: str):
-        self.config.set_guild(interaction.guild.id, "welcome_image", image_url)
-        await interaction.response.send_message("✅ Welcome image updated.", ephemeral=True)
-
-    @commands.command(name="setwelcomefooter")
-    @commands.has_permissions(administrator=True)
-    async def legacy_set_welcome_footer(self, ctx, *, footer: str):
-        self.config.set_guild(ctx.guild.id, "welcome_footer", footer)
-        await ctx.send("✅ Welcome footer updated.")
-
-    @app_commands.command(name="setwelcomefooter", description="Set the welcome embed footer")
-    @app_commands.checks.has_permissions(administrator=True)
-    async def slash_set_welcome_footer(self, interaction: discord.Interaction, footer: str):
-        self.config.set_guild(interaction.guild.id, "welcome_footer", footer)
-        await interaction.response.send_message("✅ Welcome footer updated.", ephemeral=True)
-
+    # Optional deprecated alias (keeps older muscle memory working)
     @commands.command(name="setwelcomecolor")
     @commands.has_permissions(administrator=True)
     async def legacy_set_welcome_color(self, ctx, color: str):
-        value = int(color.lstrip('#'), 16)
-        self.config.set_guild(ctx.guild.id, "welcome_color", value)
-        await ctx.send("✅ Welcome color updated.")
+        try:
+            value = self._parse_hex_color(color)
+        except ValueError:
+            return await ctx.send("❌ try `,setembedcolor #ff00ff` instead (6-digit hex).")
 
-    @app_commands.command(name="setwelcomecolor", description="Set the welcome embed color (hex)")
+        self.config.set_guild(ctx.guild.id, "embed_color", value)
+        self.config.set_guild(ctx.guild.id, "welcome_color", value)
+        await ctx.send("✅ updated. (use `setembedcolor` next time.)")
+
+    # ---------------------------
+    # (2) Settings readout
+    # ---------------------------
+
+    def _settings_embed(self, guild: discord.Guild) -> discord.Embed:
+        gid = guild.id
+
+        embed_color = get_embed_color(self.config, gid)
+        welcome_channel_id = self.config.get_guild(gid, "welcome_channel", None)
+        starboard_channel_id = self.config.get_guild(gid, "starboard_channel_id", None)
+        star_threshold = self.config.get_guild(gid, "star_threshold", 1)
+
+        welcome_channel = guild.get_channel(int(welcome_channel_id)) if welcome_channel_id else None
+        starboard_channel = guild.get_channel(int(starboard_channel_id)) if starboard_channel_id else None
+
+        e = themed_embed(
+            config=self.config,
+            guild_id=gid,
+            title="Settings",
+            description="current server configuration",
+            footer=DEFAULT_EMBED_FOOTER
+        )
+
+        e.add_field(name="Embed Color", value=f"`#{embed_color:06x}`", inline=True)
+        e.add_field(name="Welcome Channel", value=(welcome_channel.mention if welcome_channel else "(not set)"), inline=True)
+        e.add_field(name="Starboard Channel", value=(starboard_channel.mention if starboard_channel else "(not set)"), inline=True)
+        e.add_field(name="Star Threshold", value=f"`{star_threshold}`", inline=True)
+        return e
+
+    @commands.command(name="settings")
+    @commands.has_permissions(administrator=True)
+    async def legacy_settings(self, ctx):
+        await ctx.send(embed=self._settings_embed(ctx.guild))
+
+    @app_commands.command(name="settings", description="View this server's bot settings")
     @app_commands.checks.has_permissions(administrator=True)
-    async def slash_set_welcome_color(self, interaction: discord.Interaction, color: str):
-        value = int(color.lstrip('#'), 16)
-        self.config.set_guild(interaction.guild.id, "welcome_color", value)
-        await interaction.response.send_message("✅ Welcome color updated.", ephemeral=True)
+    async def slash_settings(self, interaction: discord.Interaction):
+        await interaction.response.send_message(embed=self._settings_embed(interaction.guild), ephemeral=True)
 
 
 async def setup(bot):
     cog = Welcome(bot)
     await bot.add_cog(cog)
     try:
-        bot.tree.add_command(cog.slash_welcome)
         bot.tree.add_command(cog.slash_set_welcome)
-        bot.tree.add_command(cog.slash_set_welcome_title)
-        bot.tree.add_command(cog.slash_set_welcome_description)
-        bot.tree.add_command(cog.slash_set_welcome_image)
-        bot.tree.add_command(cog.slash_set_welcome_footer)
-        bot.tree.add_command(cog.slash_set_welcome_color)
+        bot.tree.add_command(cog.slash_set_embed_color)
+        bot.tree.add_command(cog.slash_settings)
     except discord.app_commands.errors.CommandAlreadyRegistered:
         pass
