@@ -32,6 +32,7 @@ async def load_extensions():
     #await bot.load_extension("cogs.autorole")  # Only if you have it
     await bot.load_extension("cogs.moderation")
     await bot.load_extension("cogs.avatar")
+    await bot.load_extension("cogs.settings")
     # Add more cogs here if needed
 
 async def main():

@@ -334,65 +334,6 @@ class Welcome(commands.Cog):
 
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
-    # -------------------------
-    # Settings overview (now explicitly shows welcome type)
-    # -------------------------
-
-    def _settings_embed(self, guild: discord.Guild) -> discord.Embed:
-        gid = guild.id
-        embed_color = get_embed_color(self.config, gid)
-        mode = self._get_mode(gid)
-
-        welcome_channel = self._get_welcome_channel(guild)
-        welcome_channel_display = welcome_channel.mention if welcome_channel else "(not set)"
-
-        title = self.config.get_guild(gid, "welcome_title",
-                                      DEFAULT_EMBED_TITLE)
-        image = self.config.get_guild(gid, "welcome_image",
-                                      DEFAULT_EMBED_IMAGE_URL)
-
-        e = themed_embed(config=self.config,
-                         guild_id=gid,
-                         title="Settings",
-                         description="current server configuration",
-                         footer=DEFAULT_EMBED_FOOTER)
-
-        # ✅ clearer naming (welcome type)
-        e.add_field(name="Welcome Type", value=f"`{mode}`", inline=True)
-        e.add_field(name="Welcome Channel",
-                    value=welcome_channel_display,
-                    inline=True)
-        e.add_field(name="Embed Color",
-                    value=f"`#{embed_color:06x}`",
-                    inline=True)
-
-        # optional clarity: if auto but not ready, show it right in settings
-        if mode == "auto" and welcome_channel is None:
-            e.add_field(
-                name="Auto Mode Status",
-                value="⚠️ not ready (set a channel with `setwelcomechannel`)",
-                inline=False)
-
-        e.add_field(name="Welcome Title",
-                    value=(title[:100] + "…" if len(title) > 100 else title),
-                    inline=False)
-        e.add_field(name="Welcome Image", value=image, inline=False)
-        return e
-
-    @commands.command(name="settings")
-    @commands.has_permissions(administrator=True)
-    async def legacy_settings(self, ctx):
-        await ctx.send(embed=self._settings_embed(ctx.guild))
-
-    @app_commands.command(name="settings",
-                          description="View this server's bot settings")
-    @app_commands.checks.has_permissions(administrator=True)
-    async def slash_settings(self, interaction: discord.Interaction):
-        await interaction.response.send_message(embed=self._settings_embed(
-            interaction.guild),
-                                                ephemeral=True)
-
-
 async def setup(bot):
     cog = Welcome(bot)
     await bot.add_cog(cog)
@@ -407,6 +348,5 @@ async def setup(bot):
         bot.tree.add_command(cog.slash_set_welcome_footer)
 
         bot.tree.add_command(cog.slash_welcome)
-        bot.tree.add_command(cog.slash_settings)
     except discord.app_commands.errors.CommandAlreadyRegistered:
         pass
