@@ -9,12 +9,9 @@ from utils.embed_factory import themed_embed, DEFAULT_EMBED_FOOTER, get_embed_co
 # Defaults
 # -------------------------
 
-DEFAULT_EMBED_TITLE = "hi you,"
-DEFAULT_EMBED_DESCRIPTION = ("think of this place like the moment\n"
-                             "right before the chorus hits\n"
-                             "still, honest,,\n"
-                             "a little sad\n"
-                             "but somehow sweeter for it")
+DEFAULT_EMBED_TITLE = "hi,"
+DEFAULT_EMBED_DESCRIPTION = ("18+ server;\n"
+                             "i like cake;")
 DEFAULT_EMBED_IMAGE_URL = "https://i.pinimg.com/736x/c5/83/b6/c583b6f4ef35c73420ce15cbadb99250.jpg"
 
 DEFAULT_WELCOME_MODE = "static"  # "static" or "auto"
